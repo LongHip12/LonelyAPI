@@ -3,3 +3,4 @@ asyncio==3.4.3
 colorama==0.4.6
 Flask==2.3.3
 python-dotenv==1.0.0
+requests==2.31.0
