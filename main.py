@@ -232,7 +232,7 @@ def index():
             "berries": "🍓 Berries",
             "fruit": "🍎 Fruit",
             "legendarysword": "⚔️ Legendary Sword",
-            "pirateraid": " Pirate Raid",
+            "pirateraid": "🏴‍☠️ Pirate Raid",
             "hakicolor": "🎨 Haki Color",
             "hakilegendary": "✨ Legendary Haki",
             "bossnormal": "👹 Normal Boss",
