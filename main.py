@@ -98,10 +98,17 @@ MULTIBOSS_MAPPING = {
 # ==================== FLASK APP ====================
 app = Flask(__name__, static_folder='static', template_folder='templates')
 
-# Initialize data store
+# Initialize data store - FIXED VERSION
 data_store = {}
+print(f"{Fore.CYAN}[INIT]{Style.RESET_ALL} 🗂️ Đang khởi tạo data_store...")
+
+count = 0
 for event_type in EVENT_TYPES:
-    data_store[event_type] = {"endpoint": event_type, "jobs": [], "total_jobs": 0}
+    if event_type and event_type not in data_store:  # CHỈ THÊM NẾU KHÔNG PHẢI NONE VÀ CHƯA CÓ
+        data_store[event_type] = {"endpoint": event_type, "jobs": [], "total_jobs": 0}
+        count += 1
+
+print(f"{Fore.GREEN}[INIT]{Style.RESET_ALL} ✅ Đã khởi tạo {count}/{len(EVENT_TYPES)} endpoints")
 
 # ==================== SYSTEM STATUS ====================
 system_status = {
@@ -130,16 +137,38 @@ def get_total_jobs():
     return sum(data["total_jobs"] for data in data_store.values())
 
 def get_latest_jobs(count=5):
-    """Lấy jobs mới nhất"""
+    """Lấy jobs mới nhất - FIXED"""
     all_jobs = []
+    
     for endpoint, data in data_store.items():
-        for job in data["jobs"][:3]:
-            job_copy = job.copy()
+        # BỎ QUA ENDPOINT NONE
+        if endpoint is None:
+            continue
+            
+        # LẤY 3 JOBS ĐẦU TIÊN
+        jobs_to_check = data.get("jobs", [])[:3]
+        
+        for job in jobs_to_check:
+            # KIỂM TRA JOB HỢP LỆ
+            if job is None or not isinstance(job, dict):
+                continue
+                
+            # TẠO BẢN SAO AN TOÀN
+            job_copy = {}
+            for key, value in job.items():
+                if key is not None:  # CHỈ THÊM KEY KHÔNG PHẢI NONE
+                    job_copy[key] = value
+            
             job_copy["event_type"] = endpoint
             all_jobs.append(job_copy)
     
-    all_jobs.sort(key=lambda x: x.get("timestamp", ""), reverse=True)
-    return all_jobs[:count]
+    # SORT THEO TIMESTAMP
+    try:
+        all_jobs.sort(key=lambda x: x.get("timestamp", "2000-01-01"), reverse=True)
+        return all_jobs[:count]
+    except Exception as e:
+        print(f"{Fore.RED}[JOBS]{Style.RESET_ALL} ❌ Lỗi sort jobs: {e}")
+        return []
 
 def update_system_status():
     """Cập nhật trạng thái hệ thống"""
@@ -148,26 +177,42 @@ def update_system_status():
     system_status["active_channels"] = len(MONITOR_CHANNELS)
 
 def cleanup_old_jobs():
-    """Tự động xóa jobs cũ sau 5 phút"""
+    """Tự động xóa jobs cũ sau 5 phút - FIXED"""
     current_time = datetime.now()
     cleanup_threshold = current_time - timedelta(seconds=CLEANUP_INTERVAL)
     
     cleaned_count = 0
     
     for endpoint, data in data_store.items():
-        original_count = len(data["jobs"])
+        # BỎ QUA ENDPOINT NONE
+        if endpoint is None:
+            continue
+            
+        original_count = len(data.get("jobs", []))
         
-        data["jobs"] = [
-            job for job in data["jobs"] 
-            if datetime.fromisoformat(job.get("timestamp", current_time.isoformat())) > cleanup_threshold
-        ]
+        # LỌC JOBS CŨ
+        new_jobs = []
+        for job in data.get("jobs", []):
+            if job is None or not isinstance(job, dict):
+                continue
+                
+            try:
+                job_time = datetime.fromisoformat(job.get("timestamp", "2000-01-01T00:00:00"))
+                if job_time > cleanup_threshold:
+                    new_jobs.append(job)
+            except:
+                # NẾU TIMESTAMP LỖI, GIỮ LẠI
+                new_jobs.append(job)
         
-        data["total_jobs"] = len(data["jobs"])
-        cleaned_count += (original_count - len(data["jobs"]))
+        data["jobs"] = new_jobs
+        data["total_jobs"] = len(new_jobs)
+        cleaned_count += (original_count - len(new_jobs))
     
     if cleaned_count > 0:
         print(f"{Fore.YELLOW}[CLEANUP]{Style.RESET_ALL} 🗑️ Đã xóa {cleaned_count} jobs cũ")
-
+    
+    return cleaned_count
+    
 # ==================== FLASK ROUTES ====================
 @app.route('/')
 def index():
@@ -238,6 +283,10 @@ def index():
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="robots" content="noindex, nofollow, noarchive">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>System Status</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -630,6 +679,42 @@ def index():
                 width: 100%;
                 right: -100%;
             }}
+            /* CHỐNG BÔI ĐEN VÀ COPY */
+            body {{
+                -webkit-user-select: none; /* Safari */
+                -moz-user-select: none;    /* Firefox */
+                -ms-user-select: none;     /* Internet Explorer/Edge */
+                user-select: none;         /* Chuẩn */
+            }}
+            
+            /* Cho phép bôi đen trên input/textarea nếu có */
+            input, textarea {{
+                -webkit-user-select: text;
+                -moz-user-select: text;
+                -ms-user-select: text;
+                user-select: text;
+            }}
+            
+            /* CHỐNG CHUỘT PHẢI */
+            body {{
+                -webkit-touch-callout: none; /* iOS Safari */
+            }}
+            
+            /* CHỐNG KÉO HÌNH ẢNH */
+            img {{
+                -webkit-user-drag: none;
+                -khtml-user-drag: none;
+                -moz-user-drag: none;
+                -o-user-drag: none;
+                user-drag: none;
+                pointer-events: none;
+            }}
+            
+            /* CHỐNG DRAG NỘI DUNG */
+            .status-card, .job-item, .stat-card {{
+                -webkit-user-drag: none;
+                user-drag: none;
+            }}
         }}
     </style>
 </head>
@@ -769,6 +854,62 @@ def index():
     </footer>
 
     <script>
+        // CHỐNG CHUỘT PHẢI
+        document.addEventListener('contextmenu', function(e) {{
+            e.preventDefault();
+            return false;
+        }});
+        
+        // CHỐNG PHÍM TẮT (Ctrl+C, Ctrl+A, Ctrl+U, F12, etc.)
+        document.addEventListener('keydown', function(e) {{
+            // Ctrl+U (View source)
+            if (e.ctrlKey && e.key === 'u') {{
+                e.preventDefault();
+                return false;
+            }}
+            
+            // Ctrl+S (Save page)
+            if (e.ctrlKey && e.key === 's') {{
+                e.preventDefault();
+                return false;
+            }}
+            
+            // Ctrl+P (Print)
+            if (e.ctrlKey && e.key === 'p') {{
+                e.preventDefault();
+                return false;
+            }}
+            
+            // Ctrl+Shift+I, Ctrl+Shift+J, Ctrl+Shift+C (DevTools)
+            if (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J' || e.key === 'C')) {{
+                e.preventDefault();
+                return false;
+            }}
+            
+            // F12 (DevTools)
+            if (e.key === 'F12') {{
+                e.preventDefault();
+                return false;
+            }}
+        }});
+        
+        // CHỐNG KÉO VÀ THẢ
+        document.addEventListener('dragstart', function(e) {{
+            e.preventDefault();
+            return false;
+        }});
+        
+        // CHỐNG COPY BẰNG PHÍM TẮT (Ctrl+C, Ctrl+A)
+        document.addEventListener('copy', function(e) {{
+            e.preventDefault();
+            return false;
+        }});
+        
+        document.addEventListener('cut', function(e) {{
+            e.preventDefault();
+            return false;
+        }});
+        
         // Update timestamp tự động
         function updateTimestamp() {{
             const now = new Date();
@@ -930,6 +1071,10 @@ def handle_data(endpoint):
                 "timestamp": datetime.now().isoformat()
             }
             
+            # Format thông báo cho notify
+            if job_data["Players"] and job_data["World"]:
+                print(f"{Fore.GREEN}[NOTIFY]{Style.RESET_ALL} 📢 {job_data['Event-Type']}: Players {job_data['Players']} | World {job_data['World']}")
+            
             if job_data["Job-Id"]:
                 existing_job_index = -1
                 for i, job in enumerate(data_store[endpoint]["jobs"]):
@@ -1070,6 +1215,26 @@ class SelfBotMonitor:
         self.headers = {"Authorization": token}
         self.processed_messages = set()
     
+    async def start_monitoring(self):
+        """Bắt đầu monitor tất cả channels"""
+        print(f"{Fore.GREEN}[SELFBOT]{Style.RESET_ALL} 🚀 Đang khởi động monitor...")
+        
+        # Kiểm tra token
+        token_valid = await self.check_token_valid()
+        if not token_valid:
+            print(f"{Fore.RED}[SELFBOT]{Style.RESET_ALL} ❌ Không thể kết nối SelfBot!")
+            return
+        
+        print(f"{Fore.GREEN}[SELFBOT]{Style.RESET_ALL} ✅ Token hợp lệ, bắt đầu monitor...")
+        
+        # Bắt đầu monitor các channel
+        tasks = []
+        for channel_id, channel_config in MONITOR_CHANNELS.items():
+            task = self.monitor_channel_realtime(channel_id, channel_config)
+            tasks.append(task)
+        
+        await asyncio.gather(*tasks)
+    
     async def check_token_valid(self):
         """Kiểm tra token có hợp lệ không"""
         url = f"{BASE_URL}/users/@me"
@@ -1084,6 +1249,32 @@ class SelfBotMonitor:
                     print(f"{Fore.RED}[SELFBOT]{Style.RESET_ALL} ❌ Token không hợp lệ (Lỗi {resp.status})")
                     system_status["selfbot_connected"] = False
                     return False
+    
+    async def monitor_channel_realtime(self, channel_id, channel_config):
+        """Monitor channel thời gian thực"""
+        channel_name = channel_config["name"]
+        
+        print(f"{Fore.CYAN}[SELFBOT]{Style.RESET_ALL} 👀 Bắt đầu monitor {channel_name} ({channel_id})")
+        
+        last_check = None
+        
+        while True:
+            try:
+                messages = await self.get_channel_messages(channel_id, limit=5)
+                
+                if messages:
+                    latest_message = messages[0]
+                    
+                    if last_check is None or latest_message["id"] != last_check:
+                        for message in messages:
+                            await self.process_discord_message(message)
+                        last_check = latest_message["id"]
+                
+                await asyncio.sleep(5)
+                
+            except Exception as e:
+                print(f"{Fore.RED}[SELFBOT]{Style.RESET_ALL} ❌ Lỗi {channel_name}: {e}")
+                await asyncio.sleep(10)
     
     async def get_channel_messages(self, channel_id, limit=5):
         """Lấy tin nhắn mới nhất từ channel"""
@@ -1100,119 +1291,33 @@ class SelfBotMonitor:
     
     def extract_script_from_content(self, content):
         """Trích xuất script từ nội dung"""
+        # Tìm trong code blocks
+        code_patterns = [
+            r'```(?:lua|roblox)?\s*(.*?)```',
+            r'```(.*?)```',
+            r'`(.*?)`'
+        ]
+        
+        for pattern in code_patterns:
+            match = re.search(pattern, content, re.DOTALL | re.IGNORECASE)
+            if match:
+                script = match.group(1).strip()
+                if "TeleportToPlaceInstance" in script or "GetService" in script:
+                    return script
+        
+        # Tìm trực tiếp
         script_patterns = [
-            r'game:GetService\("TeleportService"\):TeleportToPlaceInstance\([^)]+\)',
+            r'game:GetService\(["\']TeleportService["\']\):TeleportToPlaceInstance\([^)]+\)',
+            r':TeleportToPlaceInstance\([^)]+\)',
             r'TeleportToPlaceInstance\([^)]+\)'
         ]
         
         for pattern in script_patterns:
-            match = re.search(pattern, content)
+            match = re.search(pattern, content, re.DOTALL)
             if match:
                 return match.group(0)
+        
         return "N/A"
-    
-    def parse_general_data(self, content):
-        """Parse dữ liệu chung từ content"""
-        data = {
-            "Job-Id": "",
-            "Players": "",
-            "World": "",
-            "Name": "",
-            "Script": "",
-            "Event-Type": "",
-            "timestamp": datetime.now().isoformat()
-        }
-        
-        # Tìm Job-Id (UUID)
-        jobid_patterns = [
-            r'([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})',
-            r'Job ID.*?([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})'
-        ]
-        
-        # Tìm Players
-        players_pattern = r'> Player Count: (\d+/\d+)'
-        players_pattern2 = r'(\d+/\d+)'
-        
-        # Tìm World
-        world_patterns = [
-            r'> World: (Sea [123])',
-            r'> World: (World [123])',
-            r'World: (Sea [123])',
-            r'World: (World [123])'
-        ]
-        
-        # Tìm Job-Id
-        for pattern in jobid_patterns:
-            match = re.search(pattern, content, re.IGNORECASE)
-            if match:
-                data["Job-Id"] = match.group(1)
-                break
-        
-        # Tìm Players
-        match = re.search(players_pattern, content)
-        if not match:
-            match = re.search(players_pattern2, content)
-        if match:
-            data["Players"] = match.group(1)
-        
-        # Tìm World
-        for pattern in world_patterns:
-            match = re.search(pattern, content, re.IGNORECASE)
-            if match:
-                data["World"] = match.group(1)
-                break
-        
-        # Trích xuất script
-        data["Script"] = self.extract_script_from_content(content)
-        
-        return data
-    
-    def detect_event_type(self, content, channel_config):
-        """Xác định event type từ content và channel config"""
-        channel_type = channel_config.get("type", "")
-        
-        # Xử lý kênh đa dạng (multiboss)
-        if channel_type == "multiboss":
-            for pattern, boss_info in MULTIBOSS_MAPPING.items():
-                if pattern in content:
-                    return boss_info["endpoint"], boss_info["name"]
-        
-        # Xử lý kênh có pattern cụ thể
-        if "pattern" in channel_config:
-            pattern = channel_config["pattern"]
-            if pattern != "all" and pattern in content:
-                return channel_type, pattern.replace("Spawned", "").strip()
-        
-        # Xử lý kênh có patterns
-        if "patterns" in channel_config:
-            for pattern in channel_config["patterns"]:
-                if pattern in content:
-                    return channel_type, pattern
-        
-        # Tìm trong code blocks ```
-        code_block_pattern = r'```(.*?)```'
-        matches = re.findall(code_block_pattern, content, re.DOTALL)
-        if matches:
-            for match in matches:
-                match_text = match.strip()
-                if match_text:
-                    # Kiểm tra nếu match_text khớp với pattern nào
-                    for pattern, boss_info in MULTIBOSS_MAPPING.items():
-                        if pattern.lower() in match_text.lower():
-                            return boss_info["endpoint"], boss_info["name"]
-                    
-                    # Kiểm tra với event types
-                    for event_type, info in EVENT_TYPES.items():
-                        if "pattern" in info and info["pattern"] != "all":
-                            if info["pattern"].lower() in match_text.lower():
-                                return event_type, info["name"]
-                        
-                        if "patterns" in info:
-                            for pattern in info["patterns"]:
-                                if pattern.lower() in match_text.lower():
-                                    return event_type, info["name"]
-        
-        return channel_type, channel_config["name"]
     
     async def process_discord_message(self, message):
         """Xử lý tin nhắn Discord"""
@@ -1231,10 +1336,8 @@ class SelfBotMonitor:
         if not content:
             return
         
-        print(f"{Fore.MAGENTA}[SELFBOT]{Style.RESET_ALL} 🎯 Tin nhắn từ {config['name']}: {content[:100]}...")
-        
-        # Parse dữ liệu
-        data = self.parse_general_data(content)
+        # Parse dữ liệu với message object để lấy embed
+        data = self.parse_general_data(content, message)
         
         if not data["Job-Id"]:
             print(f"{Fore.YELLOW}[SELFBOT]{Style.RESET_ALL} ⚠️ Không tìm thấy Job-Id, bỏ qua")
@@ -1245,9 +1348,13 @@ class SelfBotMonitor:
         data["Event-Type"] = event_type
         data["Name"] = event_name
         
-        print(f"{Fore.GREEN}[SELFBOT]{Style.RESET_ALL} ✅ Phát hiện: {event_name} ({event_type}) - Job: {data['Job-Id']}")
-        print(f"{Fore.CYAN}[DATA]{Style.RESET_ALL} 👥 Players: {data['Players']}")
-        print(f"{Fore.CYAN}[DATA]{Style.RESET_ALL} 🌍 World: {data['World']}")
+        print(f"{Fore.GREEN}[SELFBOT]{Style.RESET_ALL} ✅ {event_name} | Job: {data['Job-Id'][:8]}...")
+        
+        if data["Players"]:
+            print(f"{Fore.CYAN}[DATA]{Style.RESET_ALL} 👥 Players: {data['Players']}")
+        
+        if data["World"]:
+            print(f"{Fore.CYAN}[DATA]{Style.RESET_ALL} 🌍 World: {data['World']}")
         
         # Cập nhật system status
         system_status["last_message_time"] = datetime.now()
@@ -1257,6 +1364,138 @@ class SelfBotMonitor:
         success = await self.send_to_api(event_type, data)
         if success:
             self.processed_messages.add(message_id)
+    
+    def parse_players_from_embed(self, message):
+        """Parse players từ Discord embed"""
+        embeds = message.get('embeds', [])
+        
+        if not embeds:
+            return ""
+        
+        embed = embeds[0]
+        
+        # TẠO FULL TEXT TỪ EMBED
+        full_text = ""
+        
+        if embed.get('title'):
+            full_text += f"{embed['title']}\n"
+        
+        if embed.get('description'):
+            full_text += f"{embed['description']}\n"
+        
+        if embed.get('fields'):
+            for field in embed['fields']:
+                field_name = field.get('name', '')
+                field_value = field.get('value', '')
+                full_text += f"{field_name}: {field_value}\n"
+        
+        # TÌM PLAYERS BẰNG PATTERN (\d+/\d+)
+        players_pattern = r"(\d+/\d+)"
+        players_match = re.search(players_pattern, full_text)
+        
+        if players_match:
+            return players_match.group(1).strip()
+        
+        return ""
+    
+    def parse_general_data(self, content, message=None):
+        """Parse dữ liệu chung từ content và embed"""
+        data = {
+            "Job-Id": "",
+            "Players": "",
+            "World": "",
+            "PlaceId": "",
+            "Name": "",
+            "Script": "",
+            "Event-Type": "",
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        # TÌM JOB-ID
+        uuid_pattern = r'([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})'
+        match = re.search(uuid_pattern, content, re.IGNORECASE)
+        if match:
+            data["Job-Id"] = match.group(1)
+        
+        # TÌM PLAYERS - CHỈ TỪ EMBED
+        if message:
+            data["Players"] = self.parse_players_from_embed(message)
+        
+        # TÌM WORLD
+        world_match = re.search(r'>\s*World:\s*(Sea\s*[123])', content, re.IGNORECASE)
+        if world_match:
+            data["World"] = world_match.group(1)
+        
+        # TÌM SCRIPT
+        script = ""
+        code_match = re.search(r'```(?:lua|roblox)?\s*(.*?)```', content, re.DOTALL | re.IGNORECASE)
+        if code_match:
+            script = code_match.group(1).strip()
+        
+        if not script:
+            teleport_match = re.search(r'TeleportToPlaceInstance\([^)]+\)', content, re.DOTALL)
+            if teleport_match:
+                script = teleport_match.group(0)
+        
+        data["Script"] = script if script else "N/A"
+        
+        # TÌM PLACE ID
+        if script:
+            place_match = re.search(r'TeleportToPlaceInstance\((\d+)', script)
+            if place_match:
+                data["PlaceId"] = place_match.group(1)
+                
+                if not data["World"]:
+                    place_mapping = {
+                        "7449423635": "Sea 1",
+                        "100117331123089": "Sea 2",
+                        "537413528": "Sea 3"
+                    }
+                    if data["PlaceId"] in place_mapping:
+                        data["World"] = place_mapping[data["PlaceId"]]
+        
+        return data
+    
+    def detect_event_type(self, content, channel_config):
+        """Xác định event type từ content và channel config"""
+        channel_type = channel_config.get("type", "")
+        
+        if channel_type == "multiboss":
+            for pattern, boss_info in MULTIBOSS_MAPPING.items():
+                if pattern in content:
+                    return boss_info["endpoint"], boss_info["name"]
+        
+        if "pattern" in channel_config:
+            pattern = channel_config["pattern"]
+            if pattern != "all" and pattern in content:
+                return channel_type, pattern.replace("Spawned", "").strip()
+        
+        if "patterns" in channel_config:
+            for pattern in channel_config["patterns"]:
+                if pattern in content:
+                    return channel_type, pattern
+        
+        code_block_pattern = r'```(.*?)```'
+        matches = re.findall(code_block_pattern, content, re.DOTALL)
+        if matches:
+            for match in matches:
+                match_text = match.strip()
+                if match_text:
+                    for pattern, boss_info in MULTIBOSS_MAPPING.items():
+                        if pattern.lower() in match_text.lower():
+                            return boss_info["endpoint"], boss_info["name"]
+                    
+                    for event_type, info in EVENT_TYPES.items():
+                        if "pattern" in info and info["pattern"] != "all":
+                            if info["pattern"].lower() in match_text.lower():
+                                return event_type, info["name"]
+                        
+                        if "patterns" in info:
+                            for pattern in info["patterns"]:
+                                if pattern.lower() in match_text.lower():
+                                    return event_type, info["name"]
+        
+        return channel_type, channel_config["name"]
     
     async def send_to_api(self, endpoint, data):
         """Gửi dữ liệu lên API"""
@@ -1274,7 +1513,7 @@ class SelfBotMonitor:
         except Exception as e:
             print(f"{Fore.RED}[API]{Style.RESET_ALL} ❌ Lỗi kết nối: {e}")
             return False
-    
+            
     async def monitor_channel_realtime(self, channel_id, channel_config):
         """Monitor channel thời gian thực"""
         channel_name = channel_config["name"]
@@ -1346,8 +1585,26 @@ def run_flask():
     app.run(host="0.0.0.0", port=5000, debug=False, use_reloader=False)
 
 async def main():
-    """Hàm chính"""
+    """Hàm chính - FIXED VERSION"""
     print(f"{Fore.GREEN}[SYSTEM]{Style.RESET_ALL} 🚀 Đang khởi động hệ thống...")
+    
+    # FIX 1: XÓA KEY NONE TRONG DATA_STORE TRƯỚC KHI DÙNG
+    print(f"{Fore.YELLOW}[FIX]{Style.RESET_ALL} 🔍 Đang kiểm tra data_store...")
+    
+    # Xóa tất cả key None nếu có
+    none_keys = [key for key in list(data_store.keys()) if key is None]
+    for key in none_keys:
+        del data_store[key]
+        print(f"{Fore.YELLOW}[FIX]{Style.RESET_ALL} 🗑️ Đã xóa key None khỏi data_store")
+    
+    # Khởi tạo lại data_store nếu cần
+    if len(data_store) == 0:
+        print(f"{Fore.YELLOW}[FIX]{Style.RESET_ALL} 🔄 Đang khởi tạo lại data_store...")
+        for event_type in EVENT_TYPES:
+            if event_type and event_type not in data_store:  # CHỈ THÊM NẾU KHÔNG PHẢI NONE VÀ CHƯA CÓ
+                data_store[event_type] = {"endpoint": event_type, "jobs": [], "total_jobs": 0}
+    
+    print(f"{Fore.GREEN}[INIT]{Style.RESET_ALL} ✅ data_store có {len(data_store)} endpoints hợp lệ")
     
     # Khởi động Flask API trong thread riêng
     flask_thread = threading.Thread(target=run_flask, daemon=True)
@@ -1356,15 +1613,34 @@ async def main():
     # Chờ Flask khởi động
     await asyncio.sleep(3)
     
+    # TEST FLASK TRƯỚC
+    print(f"{Fore.CYAN}[TEST]{Style.RESET_ALL} 🧪 Đang test Flask API...")
+    try:
+        import requests
+        resp = requests.get("http://localhost:5000/api/status", timeout=5)
+        if resp.status_code == 200:
+            print(f"{Fore.GREEN}[TEST]{Style.RESET_ALL} ✅ Flask API hoạt động tốt")
+        else:
+            print(f"{Fore.YELLOW}[TEST]{Style.RESET_ALL} ⚠️ Flask trả về mã {resp.status_code}")
+    except Exception as e:
+        print(f"{Fore.RED}[TEST]{Style.RESET_ALL} ❌ Không thể kết nối Flask: {e}")
+    
     # Khởi tạo SelfBot
     selfbot = SelfBotMonitor(SELFBOT_TOKEN)
     
     # Chạy selfbot, cleanup và status update song song
-    await asyncio.gather(
-        selfbot.start_monitoring(),
-        auto_cleanup(),
-        update_status_periodically()
-    )
+    print(f"{Fore.GREEN}[SYSTEM]{Style.RESET_ALL} 🚀 Bắt đầu monitor...")
+    
+    try:
+        await asyncio.gather(
+            selfbot.start_monitoring(),
+            auto_cleanup(),
+            update_status_periodically()
+        )
+    except Exception as e:
+        print(f"{Fore.RED}[SYSTEM]{Style.RESET_ALL} ❌ Lỗi khi chạy tasks: {e}")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     try:
