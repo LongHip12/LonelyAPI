@@ -1447,9 +1447,9 @@ class SelfBotMonitor:
                 
                 if not data["World"]:
                     place_mapping = {
-                        "7449423635": "Sea 1",
-                        "100117331123089": "Sea 2",
-                        "537413528": "Sea 3"
+                        "2753915549": "Sea 1",
+                        "4442272183": "Sea 2",
+                        "7449423635": "Sea 3"
                     }
                     if data["PlaceId"] in place_mapping:
                         data["World"] = place_mapping[data["PlaceId"]]
