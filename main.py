@@ -141,7 +141,7 @@ def get_total_jobs():
     """Tính tổng số jobs"""
     return sum(data["total_jobs"] for data in data_store.values())
 
-def get_latest_jobs(count=5):
+def get_latest_jobs(count=3):
     """Lấy jobs mới nhất - FIXED"""
     all_jobs = []
     
@@ -1396,7 +1396,7 @@ class SelfBotMonitor:
                             await self.process_discord_message(message)
                         last_check = latest_message["id"]
                 
-                await asyncio.sleep(6)
+                await asyncio.sleep(5)
                 
             except Exception as e:
                 print(f"{Fore.RED}[SELFBOT]{Style.RESET_ALL} ❌ Lỗi {channel_name}: {e}")
